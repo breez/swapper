@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package submarineswaprpc;
+
+option go_package = ".";
+
+message SubSwapServiceInitRequest {
+    bytes hash = 1 [json_name = "hash"];
+    bytes pubkey = 2 [json_name = "pubkey"];
+}
+message SubSwapServiceInitResponse {
+    string address = 1 [json_name = "address"];
+    bytes pubkey = 2 [json_name = "pubkey"];
+    int64 lock_height = 3 [json_name = "lock_height"];
+}
+
+
+
+service SubmarineSwapper {
+
+    rpc SubSwapServiceInit (SubSwapServiceInitRequest) returns (SubSwapServiceInitResponse) {
+    }
+}
