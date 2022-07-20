@@ -1,6 +1,3 @@
-//go:build submarineswaprpc
-// +build submarineswaprpc
-
 package submarineswaprpc
 
 import (
@@ -10,7 +7,6 @@ import (
 	"sync/atomic"
 
 	"github.com/lightningnetwork/lnd/lnrpc"
-	"github.com/lightningnetwork/lnd/lnwallet/btcwallet"
 	"github.com/lightningnetwork/lnd/submarineswap"
 )
 
@@ -106,14 +102,9 @@ func (s *Server) Name() string {
 // SubSwapServiceInit
 func (s *Server) SubSwapServiceInit(ctx context.Context,
 	in *SubSwapServiceInitRequest) (*SubSwapServiceInitResponse, error) {
-	b := s.cfg.Wallet.WalletController.(*btcwallet.BtcWallet).InternalWallet()
 	//Create a new submarine address and associated script
 	addr, script, swapServicePubKey, lockHeight, err := submarineswap.NewSubmarineSwap(
-		b.Database(),
-		b.Manager,
 		s.cfg.ActiveNetParams,
-		b.ChainClient(),
-		s.cfg.Wallet.Cfg.Database,
 		in.Pubkey,
 		in.Hash,
 	)
