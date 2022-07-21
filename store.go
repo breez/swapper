@@ -1,4 +1,4 @@
-package submarineswap
+package main
 
 import (
 	"context"
@@ -39,7 +39,7 @@ func saveSwapperSubmarineData(netID byte, hash []byte, lockHeight int64, swapper
 	log.Printf("submarineswap(%x, %x, %v, %x,%x) rows: %v err: %v",
 		netID, hash, lockHeight, swapperKey, script, commandTag.RowsAffected(), err)
 	if err != nil {
-		return fmt.Errorf("registerPayment(%x, %x, %v, %x, %x) error: %w",
+		return fmt.Errorf("saveSwapperSubmarineData(%x, %x, %v, %x, %x) error: %w",
 			netID, hash, lockHeight, swapperKey, script, err)
 	}
 
