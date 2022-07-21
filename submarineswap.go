@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"errors"
@@ -14,23 +13,13 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/input"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 const (
 	defaultLockHeight = 288
-)
-
-var (
-	submarineBucket      = []byte("submarineTransactions")
-	wtxmgrNamespaceKey   = []byte("wtxmgr")
-	waddrmgrNamespaceKey = []byte("waddrmgr")
 )
 
 func generateSubmarineSwapScript(swapperPubKey, payerPubKey, hash []byte, lockHeight int64) ([]byte, error) {
@@ -126,19 +115,8 @@ func main() {
 		log.Fatalf("Failed to connect to gRPC: %v", err)
 	}
 	defer conn.Close()
-
-	s := grpc.NewServer(
-		grpc_middleware.WithUnaryServerChain(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-			if md, ok := metadata.FromIncomingContext(ctx); ok {
-				for _, auth := range md.Get("authorization") {
-					if auth == "Bearer "+os.Getenv("TOKEN") {
-						return handler(ctx, req)
-					}
-				}
-			}
-			return nil, status.Errorf(codes.PermissionDenied, "Not authorized")
-		}),
-	)
+	var opts []grpc.ServerOption
+	s := grpc.NewServer(opts...)
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
