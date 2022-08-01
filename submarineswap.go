@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"swapper/mempoolspace"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -19,7 +20,8 @@ import (
 )
 
 const (
-	defaultLockHeight = 288
+	defaultLockHeight      = 288
+	redeemWitnessInputSize = 1 + 1 + 73 + 1 + 32 + 1 + 100
 )
 
 func generateSubmarineSwapScript(swapperPubKey, payerPubKey, hash []byte, lockHeight int64) ([]byte, error) {
@@ -86,6 +88,71 @@ func NewSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcuti
 func newAddressWitnessScriptHash(script []byte, net *chaincfg.Params) (*btcutil.AddressWitnessScriptHash, error) {
 	witnessProg := sha256.Sum256(script)
 	return btcutil.NewAddressWitnessScriptHash(witnessProg[:], net)
+}
+func RedeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeight) (btcutil.Amount, error) {
+
+	utxos, err := mempoolspace.GetUtxos(hash)
+	if err != nil {
+		return 0, err
+	}
+	if len(utxos) == 0 {
+		return 0, errors.New("no utxo")
+	}
+
+	redeemTx := wire.NewMsgTx(1)
+
+	// Add the inputs without the witness and calculate the amount to redeem
+	var amount btcutil.Amount
+	for _, utxo := range utxos {
+		amount += utxo.Value
+		txIn := wire.NewTxIn(&utxo.OutPoint, nil, nil)
+		txIn.Sequence = 0
+		redeemTx.AddTxIn(txIn)
+	}
+
+	//Generate a random address
+	privateKey, err := btcec.NewPrivateKey(btcec.S256())
+	if err != nil {
+		return 0, err
+	}
+	redeemAddress, err := btcutil.NewAddressPubKey(privateKey.PubKey().SerializeCompressed(), net)
+	if err != nil {
+		return 0, err
+	}
+	// Add the single output
+	redeemScript, err := txscript.PayToAddrScript(redeemAddress)
+	if err != nil {
+		return 0, err
+	}
+	txOut := wire.TxOut{PkScript: redeemScript}
+	redeemTx.AddTxOut(&txOut)
+
+	currentHeight, err := mempoolspace.CurrentHeight()
+	if err != nil {
+		return 0, err
+	}
+	redeemTx.LockTime = uint32(currentHeight)
+
+	// Calcluate the weight and the fee
+	weight := 4*redeemTx.SerializeSizeStripped() + redeemWitnessInputSize*len(redeemTx.TxIn)
+	// Adjust the amount in the txout
+	return feePerKw.FeeForWeight(int64(weight)), nil
+}
+
+func SubSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (int64, error) {
+
+	fee, err := mempoolspace.recommendedFee()
+	feePerKw, err := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
+	if err != nil {
+		return 0, err
+	}
+
+	amount, err := submarineswap.RedeemFees(ActiveNetParams, hash, feePerKw)
+
+	if err != nil {
+		return 0, err
+	}
+	return int64(amount), nil
 }
 
 func main() {
