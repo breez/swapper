@@ -11,9 +11,7 @@ import (
 
 type Client struct {
 	// meempool parameters
-	uri        string // need to implement
-	minimumFee uint64
-	utxo       []Utxo
+	uri string // need to implement
 }
 type Utxo struct {
 	Value       btcutil.Amount
@@ -32,6 +30,9 @@ type status struct {
 	block_hash   []byte
 	block_time   uint64
 }
+type RecommendedFeesResponse struct {
+	minimumFee uint64
+}
 
 func RecommendedFee() (uint64, error) {
 	response, err := http.Get("https://mempool.space/api/v1/fees/recommended")
@@ -39,10 +40,10 @@ func RecommendedFee() (uint64, error) {
 	if err != nil {
 		fmt.Print(err.Error())
 	}
-	var client Client
-	json.Unmarshal(responseBody, &client)
+	var recommendedFeesResponse RecommendedFeesResponse
+	json.Unmarshal(responseBody, &recommendedFeesResponse)
 
-	return client.minimumFee, err
+	return recommendedFeesResponse.minimumFee, err
 }
 func GetUtxos(hash []byte) ([]Utxo, error) {
 	response, err := http.Get("https://mempool.space/api/address/" + hex.EncodeToString(hash) + "/utxo")
@@ -55,7 +56,7 @@ func GetUtxos(hash []byte) ([]Utxo, error) {
 	var txos []Utxo
 	outPoints := make(map[string]struct{})
 	for i, d := range respUtxo {
-		if d.status.block_height != -1 {
+		if d.status.confirmed == true {
 			resp, err := http.Get("https://mempool.space/api/tx/" + hex.EncodeToString(d.txid) + "/hex")
 			if err != nil {
 				return nil, err

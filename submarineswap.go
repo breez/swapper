@@ -89,7 +89,7 @@ func newAddressWitnessScriptHash(script []byte, net *chaincfg.Params) (*btcutil.
 	witnessProg := sha256.Sum256(script)
 	return btcutil.NewAddressWitnessScriptHash(witnessProg[:], net)
 }
-func RedeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeight) (btcutil.Amount, error) {
+func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeight) (btcutil.Amount, error) {
 
 	utxos, err := mempoolspace.GetUtxos(hash)
 	if err != nil {
@@ -139,15 +139,15 @@ func RedeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 	return feePerKw.FeeForWeight(int64(weight)), nil
 }
 
-func SubSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (int64, error) {
+func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (int64, error) {
 
-	fee, err := mempoolspace.recommendedFee()
+	fee, err := mempoolspace.RecommendedFee()
 	feePerKw, err := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
 	if err != nil {
 		return 0, err
 	}
 
-	amount, err := submarineswap.RedeemFees(ActiveNetParams, hash, feePerKw)
+	amount, err := submarineswap.redeemFees(ActiveNetParams, hash, feePerKw)
 
 	if err != nil {
 		return 0, err
