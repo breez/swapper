@@ -83,8 +83,13 @@ func (c *Client) GetUtxos(hash []byte) ([]Utxo, error) {
 	return txos, nil
 }
 func (c *Client) BroadcastTransaction(redeemTx *wire.MsgTx) ([]byte, error) {
-	responseBody := bytes.NewBuffer(redeemTx)
-	resp, err := http.Post(c.baseUrl+"/tx", "application/json", responseBody)
+	// Serialize the transaction.
+	var buf bytes.Buffer
+	err := redeemTx.Serialize(&buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.Post(c.baseUrl+"/tx", "application/json", &buf)
 	if err != nil {
 		return nil, err
 	}
