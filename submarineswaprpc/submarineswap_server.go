@@ -10,8 +10,6 @@ import (
 
 // Server is a sub-server of the main RPC server.
 type Server struct {
-	started         uint32
-	stopped         uint32
 	ActiveNetParams *chaincfg.Params
 }
 
