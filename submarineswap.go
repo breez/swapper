@@ -91,6 +91,24 @@ func newAddressWitnessScriptHash(script []byte, net *chaincfg.Params) (*btcutil.
 	witnessProg := sha256.Sum256(script)
 	return btcutil.NewAddressWitnessScriptHash(witnessProg[:], net)
 }
+
+// AddressFromHash
+func AddressFromHash(net *chaincfg.Params, hash []byte) (address btcutil.Address, creationHeight, lockHeight int64, err error) {
+	var script []byte
+	creationHeight, lockHeight, _, script, err = getSwapperSubmarineData(hash)
+	if err != nil {
+		return
+	}
+	address, err = newAddressWitnessScriptHash(script, net)
+	return
+}
+
+// CreationHeight
+func CreationHeight(net *chaincfg.Params, address btcutil.Address) (creationHeight, lockHeight int64, err error) {
+	creationHeight, lockHeight, _, _, _, _, err = getSubmarineData(c, net.ScriptHashAddrID, address)
+	return
+}
+
 func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeight) (btcutil.Amount, error) {
 	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
 	utxos, err := c.GetUtxos(hash)
@@ -142,9 +160,9 @@ func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 }
 
 // Redeem
-func redeem(net *chaincfg.Params, preimage []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight) (*wire.MsgTx, error) {
+func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight) (*wire.MsgTx, error) {
 	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
-	hash := sha256.Sum256(preimage)
+	//hash := sha256.Sum256(preimage)
 	_, serviceKey, script, err := getSwapperSubmarineData(net.ScriptHashAddrID, hash[:])
 	if err != nil {
 		return nil, err
@@ -220,7 +238,7 @@ func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (in
 	}
 	return int64(amount), nil
 }
-func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, preimage []byte, redeemAddress btcutil.Address) ([]byte, error) {
+func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, redeemAddress btcutil.Address) ([]byte, error) {
 	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
 	fee, err := c.RecommendedFee()
 	feePerKw, err := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
@@ -229,7 +247,7 @@ func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, preimag
 	}
 	tx, err := redeem(
 		ActiveNetParams,
-		preimage,
+		hash,
 		redeemAddress,
 		feePerKw,
 	)
