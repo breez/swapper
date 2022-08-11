@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -63,4 +63,34 @@ func getSwapperSubmarineData(hash []byte) (lockHeight int64, swapperKey, script 
 	}
 
 	return 0, nil, nil, nil
+}
+func insertSubswapPayment(paymentHash, paymentRequest string) error {
+	commandTag, err := pgxPool.Exec(context.Background(),
+		`INSERT INTO swap_payments
+          (payment_hash, payment_request)
+          VALUES ($1, $2)
+          ON CONFLICT DO NOTHING`, paymentHash, paymentRequest)
+	if err != nil {
+		log.Printf("pgxPool.Exec('INSERT INTO swap_payments(%v, %v): %v",
+			paymentHash, paymentRequest, err)
+		return fmt.Errorf("pgxPool.Exec(): %w", err)
+	}
+	log.Printf("pgxPool.Exec('INSERT INTO swap_payments(%v, %v)'; RowsAffected(): %v'",
+		paymentHash, paymentRequest, commandTag.RowsAffected())
+	return nil
+}
+func updateSubswapPayment(paymentHash, TxID string) error {
+	commandTag, err := pgxPool.Exec(context.Background(),
+		`UPDATE swap_payments
+         SET
+          txid=txid||$2
+         WHERE payment_hash=$1`, paymentHash, []string{TxID})
+	if err != nil {
+		log.Printf("pgxPool.Exec('UPDATE swap_payments(%v, %v): %v",
+			paymentHash, TxID, err)
+		return fmt.Errorf("pgxPool.Exec(): %w", err)
+	}
+	log.Printf("pgxPool.Exec('UPDATE INTO swap_payments(%v, %v)'; RowsAffected(): %v'",
+		paymentHash, TxID, commandTag.RowsAffected())
+	return nil
 }

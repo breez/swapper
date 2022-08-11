@@ -1,8 +1,7 @@
 syntax = "proto3";
 
-package submarineswaprpc;
-
-option go_package = ".";
+package main;
+option go_package = "./submarineswaprpc";
 
 message SubSwapServiceInitRequest {
     bytes hash = 1 [json_name = "hash"];
@@ -34,7 +33,7 @@ message UnspentAmountResponse {
 message GetSwapPaymentRequest {
   string paymentRequest = 1;
   ///redeem address
-  string address = 2 [json_name = "address"];
+  bytes address = 2 [json_name = "address"];
 }
 
 message GetSwapPaymentResponse {
@@ -58,9 +57,8 @@ service SubmarineSwapper {
 
     rpc SubSwapServiceInit (SubSwapServiceInitRequest) returns (SubSwapServiceInitResponse) {
     }
-     rpc UnspentAmount (UnspentAmountRequest) returns (UnspentAmountResponse) {
+    rpc UnspentAmount (UnspentAmountRequest) returns (UnspentAmountResponse) {
     }
-
     rpc GetSwapPayment (GetSwapPaymentRequest) returns (GetSwapPaymentResponse) {
-}
+    }
 }
