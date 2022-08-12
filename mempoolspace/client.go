@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -68,12 +69,13 @@ func (c *Client) GetUtxos(hash []byte) ([]Utxo, error) {
 
 	for i, d := range respUtxo {
 		if d.status.confirmed == true {
-			//resp, err := http.Get(c.BaseUrl + "/tx/" + hex.EncodeToString(d.txid) + "/hex")
-			//if err != nil {
-			//	return nil, err
-			//}
-			//txHash, _ := ioutil.ReadAll(resp.Body)
-			op := wire.NewOutPoint(&hash, uint32(i))
+			resp, err := http.Get(c.BaseUrl + "/tx/" + hex.EncodeToString(d.txid) + "/hex")
+			if err != nil {
+				return nil, err
+			}
+			txHash, _ := ioutil.ReadAll(resp.Body)
+			newhash, err := chainhash.NewHash(txHash)
+			op := wire.NewOutPoint(newhash, uint32(i))
 			txos = append(txos, Utxo{
 				Value:       d.value,
 				BlockHeight: d.status.block_height,

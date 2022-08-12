@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"swapper/mempoolspace"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/btcutil"
@@ -45,7 +44,7 @@ func generateSubmarineSwapScript(swapperPubKey, payerPubKey, hash []byte, lockHe
 	return builder.Script()
 }
 
-func NewSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcutil.Address, script, swapperPubKey []byte, lockHeight int64, err error) {
+func newSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcutil.Address, script, swapperPubKey []byte, lockHeight int64, err error) {
 
 	if len(pubKey) != btcec.PubKeyBytesLenCompressed {
 		err = errors.New("pubKey not valid")
@@ -93,7 +92,7 @@ func newAddressWitnessScriptHash(script []byte, net *chaincfg.Params) (*btcutil.
 }
 
 // AddressFromHash
-func AddressFromHash(net *chaincfg.Params, hash []byte) (address btcutil.Address, creationHeight, lockHeight int64, err error) {
+func addressFromHash(net *chaincfg.Params, hash []byte) (address btcutil.Address, creationHeight, lockHeight int64, err error) {
 	var script []byte
 	lockHeight, _, script, err = getSwapperSubmarineData(hash)
 	if err != nil {
@@ -110,7 +109,7 @@ func AddressFromHash(net *chaincfg.Params, hash []byte) (address btcutil.Address
 //}
 
 func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeight) (btcutil.Amount, error) {
-	c := &mempoolspace.Client{BaseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	utxos, err := c.GetUtxos(hash)
 	if err != nil {
 		return 0, err
@@ -161,7 +160,7 @@ func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 
 // Redeem
 func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight) (*wire.MsgTx, error) {
-	c := &mempoolspace.Client{BaseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	//hash := sha256.Sum256(preimage)
 	_, serviceKey, script, err := getSwapperSubmarineData(hash[:])
 	if err != nil {
@@ -224,7 +223,7 @@ func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, fe
 }
 
 func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (int64, error) {
-	c := &mempoolspace.Client{BaseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	fee, err := c.RecommendedFee()
 	feePerKw := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
 	if err != nil {
@@ -239,7 +238,7 @@ func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (in
 	return int64(amount), nil
 }
 func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, redeemAddress btcutil.Address) (string, error) {
-	c := &mempoolspace.Client{BaseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	fee, err := c.RecommendedFee()
 	feePerKw := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
 	if err != nil {

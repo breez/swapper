@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 
 	"swapper/mempoolspace"
 	"swapper/submarineswaprpc"
@@ -20,11 +21,17 @@ type Server struct {
 	ActiveNetParams *chaincfg.Params
 }
 
+func getBlockchainClient() *mempoolspace.Client {
+	client := &mempoolspace.Client{BaseUrl: os.Getenv("BASE_URL")}
+
+	return client
+}
+
 // SubSwapServiceInit
 func (s *Server) SubSwapServiceInit(ctx context.Context,
 	in *submarineswaprpc.SubSwapServiceInitRequest) (*submarineswaprpc.SubSwapServiceInitResponse, error) {
 	//Create a new submarine address and associated script
-	addr, script, swapServicePubKey, lockHeight, err := NewSubmarineSwap(
+	addr, script, swapServicePubKey, lockHeight, err := newSubmarineSwap(
 		s.ActiveNetParams,
 		in.Pubkey,
 		in.Hash,
@@ -36,20 +43,20 @@ func (s *Server) SubSwapServiceInit(ctx context.Context,
 	return &submarineswaprpc.SubSwapServiceInitResponse{Address: addr.String(), Pubkey: swapServicePubKey, LockHeight: lockHeight}, nil
 }
 
-// UnspentAmount returns the total amount of the btc received in a watched address
+// unspentAmount returns the total amount of the btc received in a watched address
 // and the height of the first transaction sending btc to the address.
-func (s *Server) UnspentAmount(ctx context.Context,
+func (s *Server) unspentAmount(ctx context.Context,
 	in *submarineswaprpc.UnspentAmountRequest) (*submarineswaprpc.UnspentAmountResponse, error) {
 
 	address := in.Address
 	var lockHeight int32
-	addr, _, lh, err := AddressFromHash(s.ActiveNetParams, in.Hash)
+	addr, _, lh, err := addressFromHash(s.ActiveNetParams, in.Hash)
 	if err != nil {
 		return nil, err
 	}
 	address = addr.String()
 	lockHeight = int32(lh)
-	c := &mempoolspace.Client{BaseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	utxos, err := c.GetUtxos(in.Hash)
 	if err != nil {
 		return nil, err
@@ -95,7 +102,7 @@ func (s *Server) GetSwapPayment(ctx context.Context,
 	}
 	log.Printf("GetSwapPayment - paying node %x amt = %v, maxAllowed = %v", decodedPayReq.Destination.SerializeCompressed(), decodedAmt, maxAllowedDeposit)
 
-	utxos, err := s.UnspentAmount(ctx, &submarineswaprpc.UnspentAmountRequest{Hash: decodedPayReq.PaymentHash[:]})
+	utxos, err := s.unspentAmount(ctx, &submarineswaprpc.UnspentAmountRequest{Hash: decodedPayReq.PaymentHash[:]})
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +136,7 @@ func (s *Server) GetSwapPayment(ctx context.Context,
 	}
 
 	// Get the current blockheight
-	c := &mempoolspace.Client{BaseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	BlockHeight, err := c.CurrentHeight()
 	if err != nil {
 		log.Printf("GetSwapPayment - GetInfo error: %v", err)
@@ -149,7 +156,7 @@ func (s *Server) GetSwapPayment(ctx context.Context,
 		log.Printf("GetSwapPayment - insertSubswapPayment paymentRequest: %v, error: %v", in.PaymentRequest, err)
 		return nil, fmt.Errorf("error in insertSubswapPayment: %w", err)
 	}
-	address, _, _, _ := AddressFromHash(s.ActiveNetParams, decodedPayReq.PaymentHash[:])
+	address, _, _, _ := addressFromHash(s.ActiveNetParams, decodedPayReq.PaymentHash[:])
 	// Redeem the transaction
 	redeem, err := subSwapServiceRedeem(s.ActiveNetParams, decodedPayReq.PaymentHash[:], address)
 	if err != nil {
