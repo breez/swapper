@@ -1,8 +1,7 @@
 syntax = "proto3";
 
-package submarineswaprpc;
-
-option go_package = ".";
+package main;
+option go_package = "./submarineswaprpc";
 
 message SubSwapServiceInitRequest {
     bytes hash = 1 [json_name = "hash"];
@@ -13,11 +12,54 @@ message SubSwapServiceInitResponse {
     bytes pubkey = 2 [json_name = "pubkey"];
     int64 lock_height = 3 [json_name = "lock_height"];
 }
+message UnspentAmountRequest {
+    /// The address (to be used by a client using swap service)
+    string address = 1 [json_name = "address"];
+    /// The hash (to be used by a swapper service)
+    bytes hash = 2 [json_name = "hash"];
+}
+message UnspentAmountResponse {
+    message Utxo {
+        int32 block_height = 1 [json_name = "block_height"];
+        int64 amount = 2 [json_name = "amount"];
+        string txid = 3 [json_name = "txid"];
+        uint32 index = 4 [json_name = "index"];
+    }
+    /// The total amount
+    int64 amount = 1 [json_name = "amount"];
+    int32 lock_height = 2 [json_name = "lock_height"];
+    repeated Utxo utxos = 3 [json_name = "utxos"];
+}
+message GetSwapPaymentRequest {
+  string paymentRequest = 1;
+  ///redeem address
+  bytes address = 2 [json_name = "address"];
+  bytes preimage = 3;
+}
 
+message GetSwapPaymentResponse {
+  enum SwapError {
+    NO_ERROR = 0;
+    FUNDS_EXCEED_LIMIT = 1;
+    TX_TOO_SMALL = 2;
+    INVOICE_AMOUNT_MISMATCH = 3;
+    SWAP_EXPIRED = 4;
+  }
 
+  string paymentError = 1;
+
+  // deprecated
+  bool funds_exceeded_limit = 2;
+
+  SwapError swap_error = 3;
+}
 
 service SubmarineSwapper {
 
     rpc SubSwapServiceInit (SubSwapServiceInitRequest) returns (SubSwapServiceInitResponse) {
+    }
+    rpc UnspentAmount (UnspentAmountRequest) returns (UnspentAmountResponse) {
+    }
+    rpc GetSwapPayment (GetSwapPaymentRequest) returns (GetSwapPaymentResponse) {
     }
 }

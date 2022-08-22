@@ -8,13 +8,12 @@ import (
 	"net"
 	"os"
 	"strings"
-	"swapper/mempoolspace"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"google.golang.org/grpc"
@@ -45,7 +44,7 @@ func generateSubmarineSwapScript(swapperPubKey, payerPubKey, hash []byte, lockHe
 	return builder.Script()
 }
 
-func NewSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcutil.Address, script, swapperPubKey []byte, lockHeight int64, err error) {
+func newSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcutil.Address, script, swapperPubKey []byte, lockHeight int64, err error) {
 
 	if len(pubKey) != btcec.PubKeyBytesLenCompressed {
 		err = errors.New("pubKey not valid")
@@ -57,13 +56,13 @@ func NewSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcuti
 		return
 	}
 	//Need to check that the hash doesn't already exists in our db
-	_, _, _, _, errGet := getSwapperSubmarineData(hash)
+	_, _, _, errGet := getSwapperSubmarineData(hash)
 	if errGet == nil {
 		err = errors.New("Hash already exists")
 		return
 	}
 	//Create swapperKey and swapperPubKey
-	key, err := btcec.NewPrivateKey(btcec.S256())
+	key, err := btcec.NewPrivateKey()
 	if err != nil {
 		return
 	}
@@ -91,8 +90,26 @@ func newAddressWitnessScriptHash(script []byte, net *chaincfg.Params) (*btcutil.
 	witnessProg := sha256.Sum256(script)
 	return btcutil.NewAddressWitnessScriptHash(witnessProg[:], net)
 }
+
+// AddressFromHash
+func addressFromHash(net *chaincfg.Params, hash []byte) (address btcutil.Address, creationHeight, lockHeight int64, err error) {
+	var script []byte
+	lockHeight, _, script, err = getSwapperSubmarineData(hash)
+	if err != nil {
+		return
+	}
+	address, err = newAddressWitnessScriptHash(script, net)
+	return
+}
+
+// CreationHeight
+//func CreationHeight(net *chaincfg.Params, address btcutil.Address) (creationHeight, lockHeight int64, err error) {
+//creationHeight, lockHeight, _, _, _, _, err = getSubmarineData(net.ScriptHashAddrID, address)
+//	return
+//}
+
 func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeight) (btcutil.Amount, error) {
-	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	utxos, err := c.GetUtxos(hash)
 	if err != nil {
 		return 0, err
@@ -113,7 +130,7 @@ func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 	}
 
 	//Generate a random address
-	privateKey, err := btcec.NewPrivateKey(btcec.S256())
+	privateKey, err := btcec.NewPrivateKey()
 	if err != nil {
 		return 0, err
 	}
@@ -142,19 +159,19 @@ func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 }
 
 // Redeem
-func redeem(net *chaincfg.Params, preimage []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight) (*wire.MsgTx, error) {
-	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
-	hash := sha256.Sum256(preimage)
-	_, serviceKey, script, err := getSwapperSubmarineData(net.ScriptHashAddrID, hash[:])
+func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight, preimage []byte) (*wire.MsgTx, error) {
+	c := getBlockchainClient()
+	//hash := sha256.Sum256(preimage)
+	_, serviceKey, script, err := getSwapperSubmarineData(hash[:])
 	if err != nil {
 		return nil, err
 	}
 	utxos, err := c.GetUtxos(hash)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if len(utxos) == 0 {
-		return 0, errors.New("no utxo")
+		return nil, errors.New("no utxo")
 	}
 
 	redeemTx := wire.NewMsgTx(1)
@@ -178,7 +195,7 @@ func redeem(net *chaincfg.Params, preimage []byte, redeemAddress btcutil.Address
 
 	currentHeight, err := c.CurrentHeight()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	redeemTx.LockTime = uint32(currentHeight)
 
@@ -187,8 +204,10 @@ func redeem(net *chaincfg.Params, preimage []byte, redeemAddress btcutil.Address
 	// Adjust the amount in the txout
 	redeemTx.TxOut[0].Value = int64(amount - feePerKw.FeeForWeight(int64(weight)))
 
-	sigHashes := txscript.NewTxSigHashes(redeemTx)
-	privateKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), serviceKey)
+	inputFetcher := txscript.NewCannedPrevOutputFetcher(hash, int64(amount))
+
+	sigHashes := txscript.NewTxSigHashes(redeemTx, inputFetcher)
+	privateKey, _ := btcec.PrivKeyFromBytes(serviceKey)
 	for idx := range redeemTx.TxIn {
 		scriptSig, err := txscript.RawTxInWitnessSignature(redeemTx, sigHashes, idx, int64(utxos[idx].Value), script, txscript.SigHashAll, privateKey)
 		if err != nil {
@@ -197,7 +216,7 @@ func redeem(net *chaincfg.Params, preimage []byte, redeemAddress btcutil.Address
 		redeemTx.TxIn[idx].Witness = [][]byte{scriptSig, preimage, script}
 	}
 
-	err = c.BroadcastTransaction(redeemTx)
+	_, err = c.BroadcastTransaction(redeemTx)
 	if err != nil {
 		return nil, err
 	}
@@ -206,9 +225,9 @@ func redeem(net *chaincfg.Params, preimage []byte, redeemAddress btcutil.Address
 }
 
 func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (int64, error) {
-	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
+	c := getBlockchainClient()
 	fee, err := c.RecommendedFee()
-	feePerKw, err := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
+	feePerKw := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
 	if err != nil {
 		return 0, err
 	}
@@ -220,24 +239,25 @@ func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (in
 	}
 	return int64(amount), nil
 }
-func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, preimage []byte, redeemAddress btcutil.Address) ([]byte, error) {
-	c := &mempoolspace.Client{baseUrl: "https://mempool.space/api"}
+func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, preimage []byte) (string, error) {
+	c := getBlockchainClient()
 	fee, err := c.RecommendedFee()
-	feePerKw, err := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
+	feePerKw := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	tx, err := redeem(
 		ActiveNetParams,
-		preimage,
+		hash,
 		redeemAddress,
 		feePerKw,
+		preimage,
 	)
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	log.Infof("[subswapserviceredeem] txid: %v", tx.TxHash().String())
+	log.Printf("[subswapserviceredeem] txid: %v", tx.TxHash().String())
 	return tx.TxHash().String(), nil
 }
 

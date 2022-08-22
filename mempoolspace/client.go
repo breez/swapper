@@ -10,12 +10,13 @@ import (
 	"net/http"
 
 	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 )
 
 type Client struct {
 	// meempool parameters
-	baseUrl string // need to implement
+	BaseUrl string // need to implement
 }
 type Utxo struct {
 	Value       btcutil.Amount
@@ -42,7 +43,7 @@ type BroadcastTransactionResponse struct {
 }
 
 func (c *Client) RecommendedFee() (uint64, error) {
-	response, err := http.Get(c.baseUrl + "/v1/fees/recommended")
+	response, err := http.Get(c.BaseUrl + "/v1/fees/recommended")
 	responseBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		fmt.Print(err.Error())
@@ -54,24 +55,27 @@ func (c *Client) RecommendedFee() (uint64, error) {
 	return recommendedFeesResponse.minimumFee, err
 }
 func (c *Client) GetUtxos(hash []byte) ([]Utxo, error) {
-	response, err := http.Get(c.baseUrl + "/address/" + hex.EncodeToString(hash) + "/utxo")
+	response, err := http.Get(c.BaseUrl + "/address/" + hex.EncodeToString(hash) + "/utxo")
 	if err != nil {
 		return nil, err
 	}
 	responseBody, err := ioutil.ReadAll(response.Body)
 	defer response.Body.Close()
+
 	var respUtxo []respUtxo
 	json.Unmarshal(responseBody, &respUtxo)
 	var txos []Utxo
 	outPoints := make(map[string]struct{})
+
 	for i, d := range respUtxo {
 		if d.status.confirmed == true {
-			resp, err := http.Get(c.baseUrl + "/tx/" + hex.EncodeToString(d.txid) + "/hex")
+			resp, err := http.Get(c.BaseUrl + "/tx/" + hex.EncodeToString(d.txid) + "/hex")
 			if err != nil {
 				return nil, err
 			}
 			txHash, _ := ioutil.ReadAll(resp.Body)
-			op := wire.NewOutPoint(&txHash, uint32(i))
+			newhash, err := chainhash.NewHash(txHash)
+			op := wire.NewOutPoint(newhash, uint32(i))
 			txos = append(txos, Utxo{
 				Value:       d.value,
 				BlockHeight: d.status.block_height,
@@ -89,7 +93,7 @@ func (c *Client) BroadcastTransaction(redeemTx *wire.MsgTx) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.Post(c.baseUrl+"/tx", "application/json", &buf)
+	resp, err := http.Post(c.BaseUrl+"/tx", "application/json", &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +105,7 @@ func (c *Client) BroadcastTransaction(redeemTx *wire.MsgTx) ([]byte, error) {
 	return body, nil
 }
 func (c *Client) CurrentHeight() (uint32, error) {
-	response, err := http.Get(c.baseUrl + "/blocks/tip/height")
+	response, err := http.Get(c.BaseUrl + "/blocks/tip/height")
 	if err != nil {
 		return 0, err
 	}
