@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -62,7 +62,7 @@ func newSubmarineSwap(net *chaincfg.Params, pubKey, hash []byte) (address btcuti
 		return
 	}
 	//Create swapperKey and swapperPubKey
-	key, err := btcec.NewPrivateKey(btcec.S256())
+	key, err := btcec.NewPrivateKey()
 	if err != nil {
 		return
 	}
@@ -130,7 +130,7 @@ func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 	}
 
 	//Generate a random address
-	privateKey, err := btcec.NewPrivateKey(btcec.S256())
+	privateKey, err := btcec.NewPrivateKey()
 	if err != nil {
 		return 0, err
 	}
@@ -159,7 +159,7 @@ func redeemFees(net *chaincfg.Params, hash []byte, feePerKw chainfee.SatPerKWeig
 }
 
 // Redeem
-func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight) (*wire.MsgTx, error) {
+func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, feePerKw chainfee.SatPerKWeight, preimage []byte) (*wire.MsgTx, error) {
 	c := getBlockchainClient()
 	//hash := sha256.Sum256(preimage)
 	_, serviceKey, script, err := getSwapperSubmarineData(hash[:])
@@ -204,8 +204,10 @@ func redeem(net *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, fe
 	// Adjust the amount in the txout
 	redeemTx.TxOut[0].Value = int64(amount - feePerKw.FeeForWeight(int64(weight)))
 
-	sigHashes := txscript.NewTxSigHashes(redeemTx)
-	privateKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), serviceKey)
+	inputFetcher := txscript.NewCannedPrevOutputFetcher(hash, int64(amount))
+
+	sigHashes := txscript.NewTxSigHashes(redeemTx, inputFetcher)
+	privateKey, _ := btcec.PrivKeyFromBytes(serviceKey)
 	for idx := range redeemTx.TxIn {
 		scriptSig, err := txscript.RawTxInWitnessSignature(redeemTx, sigHashes, idx, int64(utxos[idx].Value), script, txscript.SigHashAll, privateKey)
 		if err != nil {
@@ -237,7 +239,7 @@ func subSwapServiceRedeemFees(ActiveNetParams *chaincfg.Params, hash []byte) (in
 	}
 	return int64(amount), nil
 }
-func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, redeemAddress btcutil.Address) (string, error) {
+func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, redeemAddress btcutil.Address, preimage []byte) (string, error) {
 	c := getBlockchainClient()
 	fee, err := c.RecommendedFee()
 	feePerKw := chainfee.SatPerKVByte(fee * 1000).FeePerKWeight()
@@ -249,6 +251,7 @@ func subSwapServiceRedeem(ActiveNetParams *chaincfg.Params, hash []byte, redeemA
 		hash,
 		redeemAddress,
 		feePerKw,
+		preimage,
 	)
 
 	if err != nil {

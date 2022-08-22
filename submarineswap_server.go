@@ -158,7 +158,7 @@ func (s *Server) GetSwapPayment(ctx context.Context,
 	}
 	address, _, _, _ := addressFromHash(s.ActiveNetParams, decodedPayReq.PaymentHash[:])
 	// Redeem the transaction
-	redeem, err := subSwapServiceRedeem(s.ActiveNetParams, decodedPayReq.PaymentHash[:], address)
+	redeem, err := subSwapServiceRedeem(s.ActiveNetParams, decodedPayReq.PaymentHash[:], address, in.Preimage)
 	if err != nil {
 		log.Printf("GetSwapPayment - couldn't redeem transaction for hash: %v, error: %v", hex.EncodeToString(decodedPayReq.PaymentHash[:]), err)
 		return nil, err

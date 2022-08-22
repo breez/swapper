@@ -34,6 +34,7 @@ message GetSwapPaymentRequest {
   string paymentRequest = 1;
   ///redeem address
   bytes address = 2 [json_name = "address"];
+  bytes preimage = 3;
 }
 
 message GetSwapPaymentResponse {

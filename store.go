@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
